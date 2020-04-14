@@ -77,14 +77,10 @@ struct writeback_batch_pages
 
 /*-- Data structures */
 
-struct zram_entry {
-	unsigned long handle;
-};
-
 /* Allocated for each disk page */
 struct zram_table_entry {
 	union {
-		struct zram_entry *entry;
+		unsigned long handle;
 		unsigned long element;
 	};
 	unsigned long flags;

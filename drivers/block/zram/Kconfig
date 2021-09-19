@@ -4,7 +4,6 @@ config ZRAM
 	depends on BLOCK && SYSFS && MMU
 	depends on CRYPTO_LZO || CRYPTO_ZSTD || CRYPTO_LZ4 || CRYPTO_LZ4KD || CRYPTO_LZ4HC || CRYPTO_842 || CRYPTO_DEFLATE
 	select ZSMALLOC
-	default n
 	help
 	  Creates virtual block devices called /dev/zramX (X = 0, 1, ...).
 	  Pages written to these disks are compressed and stored in memory
@@ -69,7 +68,6 @@ config ZRAM_DEF_COMP
 config ZRAM_WRITEBACK
        bool "Write back incompressible or idle page to backing device"
        depends on ZRAM
-       default n
        help
 	 With incompressible page, there is no memory saving to keep it
 	 in memory. Instead, write it out to backing device.

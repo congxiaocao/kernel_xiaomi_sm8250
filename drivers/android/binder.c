@@ -5762,8 +5762,10 @@ void rekernel_binder_transaction(bool reply, struct binder_transaction *t,
 	 dst_task = (struct task_struct *)data->mod.k_priv.binder.trans.dst_task;
 	 data->mod.k_priv.binder.trans.dst_pid = task_pid_nr(dst_task);
 	 data->uid = task_uid(dst_task).val;
- 
+
+#ifdef CONFIG_REKERNEL
 	 if (frozen_task_group_rekernel(tsk))
+#endif
 		 ret = millet_sendto_user(tsk, data, sk);
  
 	 return ret;

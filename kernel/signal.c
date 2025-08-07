@@ -2071,8 +2071,7 @@
   * If we actually decide not to stop at all because the tracer
   * is gone, we keep current->exit_code unless clear_code.
   */
- static void ptrace_stop(int exit_code, int why, int clear_code, 
-	unsigned long message, siginfo_t *info)
+ static void ptrace_stop(int exit_code, int why, int clear_code, siginfo_t *info)
 	 __releases(&current->sighand->siglock)
 	 __acquires(&current->sighand->siglock)
  {
@@ -2117,7 +2116,7 @@
 	  * [L]         task_is_traced()		[S] task_clear_jobctl_trapping();
 	  */
 	 smp_wmb();
-	 current->ptrace_message = message;
+ 
 	 current->last_siginfo = info;
 	 current->exit_code = exit_code;
  
@@ -2196,7 +2195,6 @@
 	  */
 	 spin_lock_irq(&current->sighand->siglock);
 	 current->last_siginfo = NULL;
-	 current->ptrace_message = 0;
  
 	 /* LISTENING can be set only during STOP traps, clear it */
 	 current->jobctl &= ~JOBCTL_LISTENING;
@@ -2209,7 +2207,7 @@
 	 recalc_sigpending_tsk(current);
  }
  
- static void ptrace_do_notify(int signr, int exit_code, int why, unsigned long message)
+ static void ptrace_do_notify(int signr, int exit_code, int why)
  {
 	 siginfo_t info;
  
@@ -2220,17 +2218,17 @@
 	 info.si_uid = from_kuid_munged(current_user_ns(), current_uid());
  
 	 /* Let the debugger run.  */
-	 ptrace_stop(exit_code, why, 1, message, &info);
+	 ptrace_stop(exit_code, why, 1, &info);
  }
  
- void ptrace_notify(int exit_code, unsigned long message)
+ void ptrace_notify(int exit_code)
  {
 	 BUG_ON((exit_code & (0x7f | ~0xffff)) != SIGTRAP);
 	 if (unlikely(current->task_works))
 		 task_work_run();
  
 	 spin_lock_irq(&current->sighand->siglock);
-	 ptrace_do_notify(SIGTRAP, exit_code, CLD_TRAPPED, message);
+	 ptrace_do_notify(SIGTRAP, exit_code, CLD_TRAPPED);
 	 spin_unlock_irq(&current->sighand->siglock);
  }
  
@@ -2385,10 +2383,10 @@
 			 signr = SIGTRAP;
 		 WARN_ON_ONCE(!signr);
 		 ptrace_do_notify(signr, signr | (PTRACE_EVENT_STOP << 8),
-				  CLD_STOPPED, 0);
+				  CLD_STOPPED);
 	 } else {
 		 WARN_ON_ONCE(!signr);
-		 ptrace_stop(signr, CLD_STOPPED, 0, 0, NULL);
+		 ptrace_stop(signr, CLD_STOPPED, 0, NULL);
 		 current->exit_code = 0;
 	 }
  }
@@ -2442,7 +2440,7 @@
 	  * comment in dequeue_signal().
 	  */
 	 current->jobctl |= JOBCTL_STOP_DEQUEUED;
-	 ptrace_stop(signr, CLD_TRAPPED, 0, 0, info);
+	 ptrace_stop(signr, CLD_TRAPPED, 0, info);
  
 	 /* We're back.  Did the debugger cancel the sig?  */
 	 signr = current->exit_code;

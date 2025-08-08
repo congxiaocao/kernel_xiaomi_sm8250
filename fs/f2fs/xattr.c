@@ -769,7 +769,6 @@ same:
 		inode->i_ctime = current_time(inode);
 		clear_inode_flag(inode, FI_ACL_MODE);
 	}
-
 exit:
 	kfree(base_addr);
 	return error;

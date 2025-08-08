@@ -1678,6 +1678,7 @@ int path_umount(struct path *path, int flags)
 	mntput_no_expire(mnt);
 	return ret;
 }
+EXPORT_SYMBOL(path_umount);
 
 /*
  * Now umount can handle mount points as well as block devices.

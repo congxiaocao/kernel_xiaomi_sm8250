@@ -45,6 +45,7 @@ struct nsproxy init_nsproxy = {
 	.cgroup_ns		= &init_cgroup_ns,
 #endif
 };
+EXPORT_SYMBOL(init_nsproxy);
 
 static inline struct nsproxy *create_nsproxy(void)
 {

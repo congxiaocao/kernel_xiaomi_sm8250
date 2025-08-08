@@ -120,5 +120,6 @@ static int __init selnl_init(void)
 		panic("SELinux:  Cannot create netlink socket.");
 	return 0;
 }
+EXPORT_SYMBOL(selnl_notify_policyload);
 
 __initcall(selnl_init);

@@ -101,6 +101,7 @@
 #include "avc_ss.h"
 
 struct selinux_state selinux_state;
+EXPORT_SYMBOL(selinux_state);
 
 /* SECMARK reference count */
 static atomic_t selinux_secmark_refcount = ATOMIC_INIT(0);

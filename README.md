@@ -16,7 +16,6 @@ Supported devices:
 | Code Name | Device Name                          |
 |-----------|--------------------------------------|
 | psyche    | Xiaomi Mi 12X                        |
-| thyme     | Xiaomi Mi 10S                        |
 | umi       | Xiaomi Mi 10                         |
 | munch     | Poco F4 / Redmi K40S                 |
 | lmi       | Redmi K30 Pro                        |

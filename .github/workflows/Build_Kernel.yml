@@ -13,7 +13,6 @@ on:
           - 'lmi'
           - 'umi'
           - 'psyche'
-          - 'thyme'
           - 'cmi'
           - 'cas'
           - 'apollo'

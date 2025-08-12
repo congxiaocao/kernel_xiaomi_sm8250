@@ -109,7 +109,7 @@ fi
 if [ "$KSU_VERSION" == "ksu" ]; then
     KSU_ZIP_STR=KernelSU
     echo "KSU is enabled"
-    curl -LSs "https://raw.githubusercontent.com/Prslc/KernelSU/main/kernel/setup.sh" | bash -s non-gki
+    curl -LSs "https://raw.githubusercontent.com/Prslc-Team/KernelSU/main/kernel/setup.sh" | bash -s nongki
 elif [[ "$KSU_VERSION" == "ksu" && "$SuSFS_ENABLE" -eq 1 ]]; then
     echo "Official KernelSU not supported SuSFS"
     exit 1

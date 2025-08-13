@@ -1945,7 +1945,7 @@ struct mount *copy_tree(struct mount *mnt, struct dentry *dentry,
 {
 	struct mount *res, *p, *q, *r, *parent;
 	#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
-	bool is_current_zygote_domain = susfs_is_current_zygote_domain();
+	bool is_zygote_not_copy_mnt_ns = (susfs_is_current_zygote_domain() && !(flag & CL_COPY_MNT_NS));
 	#endif
 
 	if (!(flag & CL_COPY_UNBINDABLE) && IS_MNT_UNBINDABLE(mnt))
@@ -2000,8 +2000,7 @@ struct mount *copy_tree(struct mount *mnt, struct dentry *dentry,
 			list_add_tail(&q->mnt_list, &res->mnt_list);
 			attach_mnt(q, parent, p->mnt_mp);
 			#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
-			if (is_current_zygote_domain &&
-				!(flag & CL_COPY_MNT_NS) &&
+				if (is_zygote_not_copy_mnt_ns &&
 				q->mnt_id < DEFAULT_SUS_MNT_ID)
 			{
 				attach_mnt_count++;
@@ -3237,24 +3236,23 @@ struct mnt_namespace *copy_mnt_ns(unsigned long flags, struct mnt_namespace *ns,
 		q = next_mnt(q, new);
 		if (!q)
 			break;
-		while (p->mnt.mnt_root != q->mnt.mnt_root)
-			p = next_mnt(p, old);
+#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
+		// Here We are only interested in processes of which original mnt namespace belongs to zygote
+		if (likely(is_zygote_pid && (q->mnt_id < DEFAULT_SUS_MNT_ID))) {
+			// q->mnt.susfs_mnt_id_backup -> original mnt_id
+			// q->mnt_id -> to be modified to the fake mnt_id
+			q->mnt.susfs_mnt_id_backup = q->mnt_id;
+			q->mnt_id = ++last_entry_mnt_id;
+		}
+#endif
+		p = old;
+	 	q = new;
+
 	}
 #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
-	// q->mnt.susfs_mnt_id_backup -> original mnt_id
-	// q->mnt_id -> will be modified to the fake mnt_id
-
-	// Here We are only interested in processes of which original mnt namespace belongs to zygote 
-	// Also we just make use of existing 'q' mount pointer, no need to delcare extra mount pointer
-	if (is_zygote_pid) {
-		last_entry_mnt_id = list_first_entry(&new_ns->list, struct mount, mnt_list)->mnt_id;
-		list_for_each_entry(q, &new_ns->list, mnt_list) {
-			if (unlikely(q->mnt_id >= DEFAULT_SUS_MNT_ID)) {
-				continue;
-			}
-			q->mnt.susfs_mnt_id_backup = q->mnt_id;
-			q->mnt_id = last_entry_mnt_id++;
-		}
+		if (likely(is_zygote_pid)) {
+		last_entry_mnt_id = new->mnt_id;
+		q->mnt.susfs_mnt_id_backup = new->mnt_id;
 	}
 #endif
 
@@ -3341,6 +3339,14 @@ int ksys_mount(char __user *dev_name, char __user *dir_name, char __user *type,
 		goto out_data;
 
 	ret = do_mount(kernel_dev, dir_name, kernel_type, flags, options);
+
+#if defined(CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT) && defined(CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT)
+	// Just for the compatibility of Magic Mount KernelSU
+	if (!ret && susfs_is_auto_add_sus_ksu_default_mount_enabled && susfs_is_current_ksu_domain()) {
+		susfs_auto_add_sus_ksu_default_mount(dir_name);
+	}
+#endif
+
 
 	kfree(options);
 out_data:

@@ -323,20 +323,6 @@ compound_page_dtor * const compound_page_dtors[] = {
  */
 int min_free_kbytes = 1024;
 int user_min_free_kbytes = -1;
-#ifdef CONFIG_DISCONTIGMEM
-/*
- * DiscontigMem defines memory ranges as separate pg_data_t even if the ranges
- * are not on separate NUMA nodes. Functionally this works but with
- * watermark_boost_factor, it can reclaim prematurely as the ranges can be
- * quite small. By default, do not boost watermarks on discontigmem as in
- * many cases very high-order allocations like THP are likely to be
- * unsupported and the premature reclaim offsets the advantage of long-term
- * fragmentation avoidance.
- */
-int watermark_boost_factor __read_mostly;
-#else
-int watermark_boost_factor __read_mostly = 15000;
-#endif
 int watermark_scale_factor = 10;
 
 /*
@@ -2298,60 +2284,6 @@ static bool can_steal_fallback(unsigned int order, int start_mt)
 	return false;
 }
 
-static bool boost_eligible(struct zone *z)
-{
-	unsigned long high_wmark, threshold;
-	unsigned long reclaim_eligible, free_pages;
-
-	high_wmark = z->_watermark[WMARK_HIGH];
-	reclaim_eligible = zone_page_state_snapshot(z, NR_ZONE_INACTIVE_FILE) +
-			zone_page_state_snapshot(z, NR_ZONE_ACTIVE_FILE);
-	free_pages = zone_page_state(z, NR_FREE_PAGES) -
-			zone_page_state(z, NR_FREE_CMA_PAGES);
-	threshold = high_wmark + (2 * mult_frac(high_wmark,
-					watermark_boost_factor, 10000));
-
-	/*
-	 * Don't boost watermark If we are already low on memory where the
-	 * boosting can simply put the watermarks at higher levels for a
-	 * longer duration of time and thus the other users relied on the
-	 * watermarks are forced to choose unintended decissions. If memory
-	 * is so low, kswapd in normal mode should help.
-	 */
-
-	if (reclaim_eligible < threshold && free_pages < threshold)
-		return false;
-
-	return true;
-}
-
-static inline void boost_watermark(struct zone *zone)
-{
-	unsigned long max_boost;
-
-	if (!watermark_boost_factor || !boost_eligible(zone))
-		return;
-
-	max_boost = mult_frac(zone->_watermark[WMARK_HIGH],
-			watermark_boost_factor, 10000);
-
-	/*
-	 * high watermark may be uninitialised if fragmentation occurs
-	 * very early in boot so do not boost. We do not fall
-	 * through and boost by pageblock_nr_pages as failing
-	 * allocations that early means that reclaim is not going
-	 * to help and it may even be impossible to reclaim the
-	 * boosted watermark resulting in a hang.
-	 */
-	if (!max_boost)
-		return;
-
-	max_boost = max(pageblock_nr_pages, max_boost);
-
-	zone->watermark_boost = min(zone->watermark_boost + pageblock_nr_pages,
-		max_boost);
-}
-
 /*
  * This function implements actual steal behaviour. If order is large enough,
  * we can steal whole pageblock. If not, we first move freepages in this
@@ -2361,7 +2293,7 @@ static inline void boost_watermark(struct zone *zone)
  * itself, so pages freed in the future will be put on the correct free list.
  */
 static void steal_suitable_fallback(struct zone *zone, struct page *page,
-		unsigned int alloc_flags, int start_type, bool whole_block)
+					int start_type, bool whole_block)
 {
 	unsigned int current_order = page_order(page);
 	struct free_area *area;
@@ -2382,15 +2314,6 @@ static void steal_suitable_fallback(struct zone *zone, struct page *page,
 		change_pageblock_range(page, current_order, start_type);
 		goto single_page;
 	}
-
-	/*
-	 * Boost watermarks to increase reclaim pressure to reduce the
-	 * likelihood of future fallbacks. Wake kswapd now as the node
-	 * may be balanced overall and kswapd will not wake naturally.
-	 */
-	boost_watermark(zone);
-	if (alloc_flags & ALLOC_KSWAPD)
-		set_bit(ZONE_BOOSTED_WATERMARK, &zone->flags);
 
 	/* We are not allowed to try stealing from the whole block */
 	if (!whole_block)
@@ -2675,8 +2598,7 @@ do_steal:
 	page = list_first_entry(&area->free_list[fallback_mt],
 							struct page, lru);
 
-	steal_suitable_fallback(zone, page, alloc_flags, start_migratetype,
-								can_steal);
+	steal_suitable_fallback(zone, page, start_migratetype, can_steal);
 
 	trace_mm_page_alloc_extfrag(page, order, current_order,
 		start_migratetype, fallback_mt);
@@ -2699,7 +2621,7 @@ retry:
 	page = __rmqueue_smallest(zone, order, migratetype);
 
 	if (unlikely(!page) && __rmqueue_fallback(zone, order, migratetype,
-						  alloc_flags))
+								alloc_flags))
 		goto retry;
 
 	trace_mm_page_alloc_zone_locked(page, order, migratetype);
@@ -3337,12 +3259,6 @@ struct page *rmqueue(struct zone *preferred_zone,
 	local_irq_restore(flags);
 
 out:
-	/* Separate test+clear to avoid unnecessary atomics */
-	if (test_bit(ZONE_BOOSTED_WATERMARK, &zone->flags)) {
-		clear_bit(ZONE_BOOSTED_WATERMARK, &zone->flags);
-		wakeup_kswapd(zone, 0, 0, zone_idx(zone));
-	}
-
 	VM_BUG_ON_PAGE(page && bad_range(zone, page), page);
 	return page;
 
@@ -3704,20 +3620,6 @@ retry:
 		}
 
 		mark = wmark_pages(zone, alloc_flags & ALLOC_WMARK_MASK);
-		/*
-		 * Allow high, atomic, harder order-0 allocation requests
-		 * to skip the ->watermark_boost for min watermark check.
-		 * In doing so, check for:
-		 *  1) ALLOC_WMARK_MIN - Allow to wake up kswapd in the
-		 *			 slow path.
-		 *  2) ALLOC_HIGH - Allow high priority requests.
-		 *  3) ALLOC_HARDER - Allow (__GFP_ATOMIC && !__GFP_NOMEMALLOC),
-		 *			of the others.
-		 */
-		if (unlikely(!order && !(alloc_flags & ALLOC_WMARK_MASK) &&
-		     (alloc_flags & (ALLOC_HARDER | ALLOC_HIGH)))) {
-			mark = zone->_watermark[WMARK_MIN];
-		}
 		if (!zone_watermark_fast(zone, order, mark,
 				       ac_classzone_idx(ac), alloc_flags)) {
 			int ret;
@@ -4099,14 +4001,22 @@ should_compact_retry(struct alloc_context *ac, int order, int alloc_flags,
 		goto check_priority;
 
 	/*
-	 * make sure the compaction wasn't deferred or didn't bail out early
-	 * due to locks contention before we declare that we should give up.
-	 * But do not retry if the given zonelist is not suitable for
-	 * compaction.
+	 * compaction was skipped because there are not enough order-0 pages
+	 * to work with, so we retry only if it looks like reclaim can help.
 	 */
-	if (compaction_withdrawn(compact_result)) {
+	if (compaction_needs_reclaim(compact_result)) {
 		ret = compaction_zonelist_suitable(ac, order, alloc_flags);
 		goto out;
+	}
+
+	/*
+	 * make sure the compaction wasn't deferred or didn't bail out early
+	 * due to locks contention before we declare that we should give up.
+	 * But the next retry should use a higher priority if allowed, so
+	 * we don't just keep bailing out endlessly.
+	 */
+	if (compaction_withdrawn(compact_result)) {
+		goto check_priority;
 	}
 
 	/*
@@ -4637,18 +4547,28 @@ restart:
 
 		/*
 		 * Checks for costly allocations with __GFP_NORETRY, which
-		 * includes THP page fault allocations
+		 * includes some THP page fault allocations
 		 */
 		if (costly_order && (gfp_mask & __GFP_NORETRY)) {
 			/*
-			 * If compaction is deferred for high-order allocations,
-			 * it is because sync compaction recently failed. If
-			 * this is the case and the caller requested a THP
-			 * allocation, we do not want to heavily disrupt the
-			 * system, so we fail the allocation instead of entering
-			 * direct reclaim.
+			 * If allocating entire pageblock(s) and compaction
+			 * failed because all zones are below low watermarks
+			 * or is prohibited because it recently failed at this
+			 * order, fail immediately unless the allocator has
+			 * requested compaction and reclaim retry.
+			 *
+			 * Reclaim is
+			 *  - potentially very expensive because zones are far
+			 *    below their low watermarks or this is part of very
+			 *    bursty high order allocations,
+			 *  - not guaranteed to help because isolate_freepages()
+			 *    may not iterate over freed pages as part of its
+			 *    linear scan, and
+			 *  - unlikely to make entire pageblocks free on its
+			 *    own.
 			 */
-			if (compact_result == COMPACT_DEFERRED)
+			if (compact_result == COMPACT_SKIPPED ||
+			    compact_result == COMPACT_DEFERRED)
 				goto nopage;
 
 			/*
@@ -4693,10 +4613,6 @@ retry:
 	if (current->flags & PF_MEMALLOC)
 		goto nopage;
 
-	if (fatal_signal_pending(current) && !(gfp_mask & __GFP_NOFAIL) &&
-			(gfp_mask & __GFP_FS))
-		goto nopage;
-
 	/* Try direct reclaim and then allocating */
 	page = __alloc_pages_direct_reclaim(gfp_mask, order, alloc_flags, ac,
 							&did_some_progress);
@@ -4739,8 +4655,6 @@ retry:
 				&compaction_retries))
 		goto retry;
 
-	if (order <= PAGE_ALLOC_COSTLY_ORDER && should_ulmk_retry(gfp_mask))
-		goto retry;
 
 	/*
 	 * Deal with possible cpuset update races or zonelist updates to avoid
@@ -5154,6 +5068,8 @@ static void *make_alloc_exact(unsigned long addr, unsigned int order,
  * This function is also limited by MAX_ORDER.
  *
  * Memory allocated by this function must be released by free_pages_exact().
+ *
+ * Return: pointer to the allocated area or %NULL in case of error.
  */
 void *alloc_pages_exact(size_t size, gfp_t gfp_mask)
 {
@@ -5174,6 +5090,8 @@ EXPORT_SYMBOL(alloc_pages_exact);
  *
  * Like alloc_pages_exact(), but try to allocate on node nid first before falling
  * back.
+ *
+ * Return: pointer to the allocated area or %NULL in case of error.
  */
 void * __meminit alloc_pages_exact_nid(int nid, size_t size, gfp_t gfp_mask)
 {
@@ -5207,11 +5125,13 @@ EXPORT_SYMBOL(free_pages_exact);
  * nr_free_zone_pages - count number of pages beyond high watermark
  * @offset: The zone index of the highest zone
  *
- * nr_free_zone_pages() counts the number of counts pages which are beyond the
+ * nr_free_zone_pages() counts the number of pages which are beyond the
  * high watermark within all zones at or below a given zone index.  For each
  * zone, the number of pages is calculated as:
  *
  *     nr_free_zone_pages = managed_pages - high_pages
+ *
+ * Return: number of pages beyond high watermark.
  */
 static unsigned long nr_free_zone_pages(int offset)
 {
@@ -5238,6 +5158,9 @@ static unsigned long nr_free_zone_pages(int offset)
  *
  * nr_free_buffer_pages() counts the number of pages which are beyond the high
  * watermark within ZONE_DMA and ZONE_NORMAL.
+ *
+ * Return: number of pages beyond high watermark within ZONE_DMA and
+ * ZONE_NORMAL.
  */
 unsigned long nr_free_buffer_pages(void)
 {
@@ -5250,6 +5173,8 @@ EXPORT_SYMBOL_GPL(nr_free_buffer_pages);
  *
  * nr_free_pagecache_pages() counts the number of pages which are beyond the
  * high watermark within all zones.
+ *
+ * Return: number of pages beyond high watermark within all zones.
  */
 unsigned long nr_free_pagecache_pages(void)
 {
@@ -5692,7 +5617,8 @@ static int node_load[MAX_NUMNODES];
  * from each node to each node in the system), and should also prefer nodes
  * with no CPUs, since presumably they'll have very little allocation pressure
  * on them otherwise.
- * It returns -1 if no node is found.
+ *
+ * Return: node id of the found node or %NUMA_NO_NODE if no node is found.
  */
 static int find_next_best_node(int node, nodemask_t *used_node_mask)
 {
@@ -6542,7 +6468,7 @@ unsigned long __meminit __absent_pages_in_range(int nid,
  * @start_pfn: The start PFN to start searching for holes
  * @end_pfn: The end PFN to stop searching for holes
  *
- * It returns the number of pages frames in memory holes within a range.
+ * Return: the number of pages frames in memory holes within a range.
  */
 unsigned long __init absent_pages_in_range(unsigned long start_pfn,
 							unsigned long end_pfn)
@@ -7109,7 +7035,7 @@ void __init setup_nr_node_ids(void)
  * model has fine enough granularity to avoid incorrect mapping for the
  * populated node map.
  *
- * Returns the determined alignment in pfn's.  0 if there is no alignment
+ * Return: the determined alignment in pfn's.  0 if there is no alignment
  * requirement (single node).
  */
 unsigned long __init node_map_pfn_alignment(void)
@@ -7164,7 +7090,7 @@ static unsigned long __init find_min_pfn_for_node(int nid)
 /**
  * find_min_pfn_with_active_regions - Find the minimum PFN registered
  *
- * It returns the minimum PFN based on information provided via
+ * Return: the minimum PFN based on information provided via
  * memblock_set_node().
  */
 unsigned long __init find_min_pfn_with_active_regions(void)
@@ -7622,11 +7548,6 @@ unsigned long free_reserved_area(void *start, void *end, int poison, char *s)
 		pr_info("Freeing %s memory: %ldK\n",
 			s, pages << (PAGE_SHIFT - 10));
 
-#ifdef CONFIG_HAVE_MEMBLOCK
-		memblock_dbg("memblock_free: [%#016llx-%#016llx] %pS\n",
-			(u64)__pa(start), (u64)__pa(end), (void *)_RET_IP_);
-#endif
-
 	return pages;
 }
 EXPORT_SYMBOL(free_reserved_area);
@@ -7886,7 +7807,6 @@ static void __setup_per_zone_wmarks(void)
 			    mult_frac(zone->managed_pages,
 				      watermark_scale_factor, 10000));
 
-		zone->watermark_boost = 0;
 		zone->_watermark[WMARK_LOW]  = min_wmark_pages(zone) +
 					low + min;
 		zone->_watermark[WMARK_HIGH] = min_wmark_pages(zone) +
@@ -7990,33 +7910,6 @@ int min_free_kbytes_sysctl_handler(struct ctl_table *table, int write,
 		user_min_free_kbytes = min_free_kbytes;
 		setup_per_zone_wmarks();
 	}
-	return 0;
-}
-
-int watermark_boost_factor_sysctl_handler(struct ctl_table *table, int write,
-	void __user *buffer, size_t *length, loff_t *ppos)
-{
-	int rc;
-
-	rc = proc_dointvec_minmax(table, write, buffer, length, ppos);
-	if (rc)
-		return rc;
-
-	return 0;
-}
-
-int kswapd_threads_sysctl_handler(struct ctl_table *table, int write,
-	void __user *buffer, size_t *length, loff_t *ppos)
-{
-	int rc;
-
-	rc = proc_dointvec_minmax(table, write, buffer, length, ppos);
-	if (rc)
-		return rc;
-
-	if (write)
-		update_kswapd_threads();
-
 	return 0;
 }
 
@@ -8493,7 +8386,7 @@ static int __alloc_contig_migrate_range(struct compact_control *cc,
  * pageblocks in the range.  Once isolated, the pageblocks should not
  * be modified by others.
  *
- * Returns zero on success or negative error code.  On success all
+ * Return: zero on success or negative error code.  On success all
  * pages which PFN is in [start, end) are allocated for the caller and
  * need to be freed with free_contig_range().
  */
@@ -8734,6 +8627,7 @@ __offline_isolated_pages(unsigned long start_pfn, unsigned long end_pfn)
 		zone->free_area[order].nr_free--;
 		for (i = 0; i < (1 << order); i++)
 			SetPageReserved((page+i));
+		post_alloc_hook(page, order, GFP_NOWAIT);
 		pfn += (1 << order);
 	}
 	spin_unlock_irqrestore(&zone->lock, flags);

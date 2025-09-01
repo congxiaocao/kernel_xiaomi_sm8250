@@ -82,60 +82,30 @@ clang --version
 
 # Initialize variable
 KERNEL_SRC=$(pwd)
-SuSFS_ENABLE=0
 KPM_ENABLE=0
 KSU_VERSION=$2
-ADDITIONAL=$3
-TARGET_SYSTEM=$4
+TARGET_SYSTEM=$3
 
 echo "TARGET_DEVICE: $TARGET_DEVICE"
 
-KSU_ENABLE=$([[ "$KSU_VERSION" == "ksu" || "$KSU_VERSION" == "rksu" || "$KSU_VERSION" == "sukisu" || "$KSU_VERSION" == "sukisu-ultra" ]] && echo 1 || echo 0)
-
-if [ "$ADDITIONAL" == "susfs-kpm" ]; then
-    SuSFS_ENABLE=1
-    KPM_ENABLE=1
-    echo "Enable SuSFS and KPM"
-elif [ "$ADDITIONAL" == "susfs" ]; then
-    SuSFS_ENABLE=1
-    echo "Enable SuSFS"
-elif [ "$ADDITIONAL" == "kpm" ]; then
-    KPM_ENABLE=1
-    echo "Enable KPM"
-else 
-    echo "The additional function is not enabled"
-fi
+KSU_ENABLE=$([[ "$KSU_VERSION" == "ksu" || "$KSU_VERSION" == "rksu" || "$KSU_VERSION" == "sukisu" ]] && echo 1 || echo 0)
 
 if [ "$KSU_VERSION" == "ksu" ]; then
     KSU_ZIP_STR=KernelSU
     echo "KSU is enabled"
     curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
-elif [[ "$KSU_VERSION" == "ksu" && "$SuSFS_ENABLE" -eq 1 ]]; then
-    echo "Official KernelSU not supported SuSFS"
-    exit 1
-elif [[ "$KSU_VERSION" == "rksu" && "$SuSFS_ENABLE" -eq 1 ]]; then
-    KSU_ZIP_STR=RKSU_SuSFS
-    echo "RKSU && SuSFS is enabled"
-    curl -LSs "https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh" | bash -s susfs-v1.5.5
 elif [ "$KSU_VERSION" == "rksu" ]; then
     KSU_ZIP_STR=RKSU
     echo "RKSU is enabled"
     curl -LSs "https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh" | bash -s main
-elif [[ "$KSU_VERSION" == "sukisu" && "$SuSFS_ENABLE" -eq 1 ]]; then
-    KSU_ZIP_STR=SukiSU_SuSFS
-    echo "SukiSU && SuSFS is enabled"
-    curl -LSs "https://raw.githubusercontent.com/ShirkNeko/KernelSU/main/kernel/setup.sh" | bash -s susfs-dev
 elif [ "$KSU_VERSION" == "sukisu" ]; then
     KSU_ZIP_STR=SukiSU
     echo "SukiSU is enabled"
-    curl -LSs "https://raw.githubusercontent.com/ShirkNeko/KernelSU/main/kernel/setup.sh" | bash -s dev
-elif [[ "$KSU_VERSION" == "sukisu-ultra" && "$SuSFS_ENABLE" -eq 1 ]]; then
-    KSU_ZIP_STR="SukiSU-Ultra"
-    echo "SukiSU-Ultra && SuSFS is enabled"
-    curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-main
-elif [ "$KSU_VERSION" == "sukisu-ultra" ]; then
-    KSU_ZIP_STR=SukiSU-Ultra
-    echo "SukiSU-Ultra is enabled"
+    curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s nongki
+elif [ "$KSU_VERSION" == "sukisu-kpm" ]; then
+    KPM_ENABLE=1
+    KSU_ZIP_STR=SukiSU-KPM
+    echo "SukiSU & KPM is enabled"
     curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s nongki
 else
     KSU_ZIP_STR=NoKernelSU
@@ -306,40 +276,6 @@ SET_CONFIG(){
             -d KPM \
             -d KALLSYMS \
             -d KALLSYMS_ALL
-    fi
-
-    if [ "$SuSFS_ENABLE" -eq 1 ];then
-        scripts/config --file out/.config \
-            -e KSU_SUSFS \
-            -e KSU_SUSFS_HAS_MAGIC_MOUNT \
-            -e KSU_SUSFS_SUS_PATH \
-            -e KSU_SUSFS_SUS_MOUNT \
-            -e KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT \
-            -e KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT \
-            -e KSU_SUSFS_SUS_KSTAT \
-            -e KSU_SUSFS_TRY_UMOUNT \
-            -e KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT \
-            -e KSU_SUSFS_SPOOF_UNAME \
-            -e KSU_SUSFS_ENABLE_LOG \
-            -e KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS \
-            -e KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG \
-            -e KSU_SUSFS_OPEN_REDIRECT
-     else
-        scripts/config --file out/.config \
-            -d KSU_SUSFS \
-            -d KSU_SUSFS_HAS_MAGIC_MOUNT \
-            -d KSU_SUSFS_SUS_PATH \
-            -d KSU_SUSFS_SUS_MOUNT \
-            -d KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT \
-            -d KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT \
-            -d KSU_SUSFS_SUS_KSTAT \
-            -d KSU_SUSFS_TRY_UMOUNT \
-            -d KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT \
-            -d KSU_SUSFS_SPOOF_UNAME \
-            -d KSU_SUSFS_ENABLE_LOG \
-            -d KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS \
-            -d KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG \
-            -d KSU_SUSFS_OPEN_REDIRECT
     fi
 }
 

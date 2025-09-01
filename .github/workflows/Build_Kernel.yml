@@ -38,22 +38,10 @@ on:
         type: choice
         default: 'sukisu-ultra'
         options:
-          - 'sukisu-ultra'
           - 'ksu'
           - 'rksu'
           - 'sukisu'
-          - 'noksu'
-
-      additional_function:
-        description: 'Additional Functions'
-        required: true
-        type: choice
-        default: 'no'
-        options:
-          - 'no'
-          - 'susfs-kpm'
-          - 'susfs'
-          - 'kpm'
+          - 'sukisu-kpm'
 
 jobs:
   build:
@@ -101,8 +89,7 @@ jobs:
           DEVICE="${{ github.event.inputs.target_device }}"
           SYSTEM="${{ github.event.inputs.system_version }}"
           KSU_VERSION="${{ github.event.inputs.kernelsu_version }}"
-          ADDITIONAL_FUNCTION="${{ github.event.inputs.additional_function }}"
-          bash build.sh "$DEVICE" "$KSU_VERSION" $ADDITIONAL_FUNCTION "$SYSTEM"
+          bash build.sh "$DEVICE" "$KSU_VERSION" "$SYSTEM"
 
       - name: Set Kernel Path
         run: |

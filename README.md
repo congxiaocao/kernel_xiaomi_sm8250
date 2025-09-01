@@ -76,15 +76,8 @@ cd ..
 
   * `ksu`: [Official KernelSU (v0.9.5)](https://github.com/tiann/KernelSU/tree/v0.9.5)
   * `rksu`: [RKSU](https://github.com/rsuntk/KernelSU)
-  * `sukisu`: [SukiSU](https://github.com/ShirkNeko/KernelSU)
-  * `sukisu-ultra`: [SukiSU-Ultra](https://github.com/SukiSU-Ultra/SukiSU-Ultra)
-
-* **ADDITIONAL_FUNCTION** (Enable `SuSFS` or `KPM`):
-
-  * `susfs`: Enable [SuSFS](https://gitlab.com/simonpunk/susfs4ksu)
-  * `kpm`: Enable [KPM](https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch)
-  * `susfs-kpm` Enable SuSFS and KPM
-  * Any other value: Disable `SuSFS` and `KPM`
+  * `sukisu`: [SukiSU-Ultra](https://github.com/SukiSU-Ultra/SukiSU-Ultra)
+  * `sukisu-kpm`: [SukiSU-Ultra](https://github.com/SukiSU-Ultra/SukiSU-Ultra)(Enable KPM)
 
 * **SYSTEM** (Target system type):
 
@@ -95,5 +88,5 @@ cd ..
 **To build the kernel, run:**
     
 ```bash
-bash build.sh TARGET_DEVICE [KSU_VERSION] [ADDITIONAL_FUNCTION] [SYSTEM]
+bash build.sh TARGET_DEVICE [KSU_VERSION] [SYSTEM]
 ```

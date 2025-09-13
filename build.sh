@@ -1,16 +1,15 @@
 #!/bin/bash
 
 # Some logics of this script are copied from [scripts/build_kernel]. Thanks to UtsavBalar1231.
-
 # Ensure the script exits on error
 set -e
 
-TOOLCHAIN_PATH=$HOME/toolchain/proton-clang/bin
+TOOLCHAIN_PATH=$HOME/toolchain/google-clang/bin
 GIT_COMMIT_ID=$(git rev-parse --short=8 HEAD)
 TARGET_DEVICE=$1
 
 if [ -z "$1" ]; then
-    echo "Error: No argument provided, please specific a target device." 
+    echo "Error: No argument provided, please specific a target device."
     echo "If you need KernelSU, please add [ksu] as the second arg."
     echo "Examples:"
     echo "Build for lmi(K30 Pro/POCO F2 Pro) without KernelSU:"
@@ -20,9 +19,7 @@ if [ -z "$1" ]; then
     exit 1
 fi
 
-
-
-if [ ! -d $TOOLCHAIN_PATH ]; then
+if [ ! -d "$TOOLCHAIN_PATH" ]; then
     echo "TOOLCHAIN_PATH [$TOOLCHAIN_PATH] does not exist."
     echo "Please ensure the toolchain is there, or change TOOLCHAIN_PATH in the script to your toolchain path."
     exit 1
@@ -31,32 +28,28 @@ fi
 echo "TOOLCHAIN_PATH: [$TOOLCHAIN_PATH]"
 export PATH="$TOOLCHAIN_PATH:$PATH"
 
-if ! command -v aarch64-linux-gnu-ld >/dev/null 2>&1; then
-    echo "[aarch64-linux-gnu-ld] does not exist, please check your environment."
-    exit 1
-fi
-
-if ! command -v arm-linux-gnueabi-ld >/dev/null 2>&1; then
-    echo "[arm-linux-gnueabi-ld] does not exist, please check your environment."
-    exit 1
-fi
-
-if ! command -v clang >/dev/null 2>&1; then
-    echo "[clang] does not exist, please check your environment."
-    exit 1
-fi
-
+for cmd in aarch64-linux-gnu-ld arm-linux-gnueabi-ld clang; do
+    if ! command -v $cmd >/dev/null 2>&1; then
+        echo "[$cmd] does not exist, please check your environment."
+        exit 1
+    fi
+done
 
 # Enable ccache for speed up compiling 
-export CCACHE_DIR="$HOME/.cache/ccache_mikernel" 
+export CCACHE_DIR="$HOME/.cache/ccache_mikernel"
 export CC="ccache gcc"
 export CXX="ccache g++"
 export PATH="/usr/lib/ccache:$PATH"
 echo "CCACHE_DIR: [$CCACHE_DIR]"
 
-
-MAKE_ARGS="ARCH=arm64 SUBARCH=arm64 O=out CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CROSS_COMPILE_COMPAT=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu-"
-
+MAKE_ARGS="ARCH=arm64 \
+    SUBARCH=arm64 \
+    O=out \
+    CC=clang \
+    CROSS_COMPILE=aarch64-linux-gnu- \
+    CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+    CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
+    CLANG_TRIPLE=aarch64-linux-gnu-"
 
 if [ "$1" == "j1" ]; then
     make $MAKE_ARGS -j1
@@ -70,50 +63,53 @@ fi
 
 if [ ! -f "arch/arm64/configs/${TARGET_DEVICE}_defconfig" ]; then
     echo "No target device [${TARGET_DEVICE}] found."
-    echo "Avaliable defconfigs, please choose one target from below down:"
+    echo "Available defconfigs, please choose one target from below:"
     ls arch/arm64/configs/*_defconfig
     exit 1
 fi
 
-
-# Check clang is existing.
 echo "[clang --version]:"
 clang --version
 
-# Initialize variable
+# Initialize variables
 KERNEL_SRC=$(pwd)
 KPM_ENABLE=0
 KSU_VERSION=$2
 TARGET_SYSTEM=$3
 
 echo "TARGET_DEVICE: $TARGET_DEVICE"
-
 KSU_ENABLE=$([[ "$KSU_VERSION" == "ksu" || "$KSU_VERSION" == "rksu" || "$KSU_VERSION" == "sukisu" ]] && echo 1 || echo 0)
 
-if [ "$KSU_VERSION" == "ksu" ]; then
-    KSU_ZIP_STR=KernelSU
-    echo "KSU is enabled"
-    curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
-elif [ "$KSU_VERSION" == "rksu" ]; then
-    KSU_ZIP_STR=RKSU
-    echo "RKSU is enabled"
-    curl -LSs "https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh" | bash -s main
-elif [ "$KSU_VERSION" == "sukisu" ]; then
-    KSU_ZIP_STR=SukiSU
-    echo "SukiSU is enabled"
-    curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s nongki
-elif [ "$KSU_VERSION" == "sukisu-kpm" ]; then
-    KPM_ENABLE=1
-    KSU_ZIP_STR=SukiSU-KPM
-    echo "SukiSU & KPM is enabled"
-    curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s nongki
-else
-    KSU_ZIP_STR=NoKernelSU
-    echo "KSU is disabled"
-fi
+# KernelSU setup
+case "$KSU_VERSION" in
+    ksu)
+        KSU_ZIP_STR=KernelSU
+        echo "KSU is enabled"
+        curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
+        ;;
+    rksu)
+        KSU_ZIP_STR=RKSU
+        echo "RKSU is enabled"
+        curl -LSs "https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh" | bash -s main
+        ;;
+    sukisu)
+        KSU_ZIP_STR=SukiSU
+        echo "SukiSU is enabled"
+        curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s nongki
+        ;;
+    sukisu-kpm)
+        KPM_ENABLE=1
+        KSU_ZIP_STR=SukiSU-KPM
+        echo "SukiSU & KPM is enabled"
+        curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s nongki
+        ;;
+    *)
+        KSU_ZIP_STR=NoKernelSU
+        echo "KSU is disabled"
+        ;;
+esac
 
 echo "Cleaning..."
-
 rm -rf out/
 rm -rf anykernel/
 
@@ -123,31 +119,18 @@ git clone https://github.com/liyafe1997/AnyKernel3 -b kona --single-branch --dep
 # Add date to local version
 local_version_str="-perf"
 local_version_date_str="-$(date +%Y%m%d)-${GIT_COMMIT_ID}-perf"
-
 sed -i "s/${local_version_str}/${local_version_date_str}/g" arch/arm64/configs/${TARGET_DEVICE}_defconfig
 
-
-Build_AOSP(){
-# ------------- Building for AOSP -------------
+Build_AOSP() {
     echo "Building for AOSP......"
     make $MAKE_ARGS ${TARGET_DEVICE}_defconfig
-
     SET_CONFIG
-    
     make $MAKE_ARGS -j$(nproc)
-
     Image_Repack
-
     echo "Build for AOSP finished."
-
-    # ------------- End of Building for AOSP -------------
 }
 
-
 Build_MIUI(){
-    # ------------- Building for MIUI -------------
-
-
     echo "Clearning [out/] and build for MIUI....."
     rm -rf out/
 
@@ -182,7 +165,6 @@ Build_MIUI(){
     sed -i 's/120 90 60/120 90 60 50 30/g' ${dts_source}/dsi-panel-g7a-37-02-0b-dsc-video.dtsi
     sed -i 's/144 120 90 60/144 120 90 60 50 48 30/g' ${dts_source}/dsi-panel-j3s-37-02-0a-dsc-video.dtsi
 
-
     # Enable back brightness control from dtsi
     sed -i 's/\/\/39 00 00 00 00 00 03 51 03 FF/39 00 00 00 00 00 03 51 03 FF/g' ${dts_source}/dsi-panel-j9-38-0a-0a-fhd-video.dtsi
     sed -i 's/\/\/39 00 00 00 00 00 03 51 0D FF/39 00 00 00 00 00 03 51 0D FF/g' ${dts_source}/dsi-panel-j2-p2-1-38-0c-0a-dsc-cmd.dtsi
@@ -216,17 +198,15 @@ Build_MIUI(){
     make $MAKE_ARGS -j$(nproc)
 
     Image_Repack MIUI
-    # ------------- End of Building for MIUI -------------
-
 }
 
-SET_CONFIG(){
+SET_CONFIG() {
     if [ "$1" == "MIUI" ]; then
         scripts/config --file out/.config \
             --set-str STATIC_USERMODEHELPER_PATH /system/bin/micd \
-            -e PERF_CRITICAL_RT_TASK	\
-            -e SF_BINDER		\
-            -e OVERLAY_FS		\
+            -e PERF_CRITICAL_RT_TASK \
+            -e SF_BINDER \
+            -e OVERLAY_FS \
             -d DEBUG_FS \
             -e MIGT \
             -e MIGT_ENERGY_MODEL \
@@ -251,7 +231,7 @@ SET_CONFIG(){
             -e MI_RECLAIM \
             -e RTMM
     fi
-    
+
     if [ "$KSU_ENABLE" -eq 1 ]; then
         scripts/config --file out/.config -e KSU
     else
@@ -259,19 +239,19 @@ SET_CONFIG(){
     fi
 
     # Enable the KSU_MANUAL_HOOK for sukisu-ultra
-    if [[ "$KSU_VERSION" == "sukisu-ultra" || "$KSU_VERSION" == "rksu"  ]];then
+    if [[ "$KSU_VERSION" == "sukisu-ultra" || "$KSU_VERSION" == "rksu" ]]; then
         scripts/config --file out/.config -e KSU_MANUAL_HOOK
     else
         scripts/config --file out/.config -d KSU_MANUAL_HOOK
     fi
 
-    # Config KPM 
+    # Config KPM
     if [ "$KPM_ENABLE" -eq 1 ]; then
         scripts/config --file out/.config \
             -e KPM \
             -e KALLSYMS \
             -e KALLSYMS_ALL
-    else 
+    else
         scripts/config --file out/.config \
             -d KPM \
             -d KALLSYMS \
@@ -279,7 +259,7 @@ SET_CONFIG(){
     fi
 }
 
-Image_Repack(){
+Image_Repack() {
     if [ -f "out/arch/arm64/boot/Image" ]; then
         echo "The file [out/arch/arm64/boot/Image] exists. AOSP Build successfully."
     else
@@ -302,13 +282,11 @@ Image_Repack(){
     fi
 
     rm -rf anykernel/kernels/
-
     mkdir -p anykernel/kernels/
-
     cp out/arch/arm64/boot/Image anykernel/kernels/
     cp out/arch/arm64/boot/dtb anykernel/kernels/
 
-    cd anykernel 
+    cd anykernel
 
     if [ "$1" == "MIUI" ]; then
         ZIP_FILENAME=Kernel_MIUI_${TARGET_DEVICE}_${KSU_ZIP_STR}_$(date +'%Y%m%d_%H%M%S')_anykernel3_${GIT_COMMIT_ID}.zip
@@ -317,17 +295,16 @@ Image_Repack(){
     fi
 
     zip -r9 $ZIP_FILENAME ./* -x .git .gitignore out/ ./*.zip
-
     mv $ZIP_FILENAME ../
-
     cd ..
 }
 
-Patch_KPM(){
+Patch_KPM() {
     cd out/arch/arm64/boot
     curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU_patch/refs/heads/main/kpm/patch_linux" -o patch
     chmod +x patch
     ./patch
+
     if [ $? -eq 0 ]; then
         rm -f Image
         mv oImage Image
@@ -335,18 +312,17 @@ Patch_KPM(){
     else
         echo "KPM Patch Failed, Use Original Image"
     fi
-    
-    cd $KERNEL_SRC
 
+    cd $KERNEL_SRC
 }
 
-if [ "$TARGET_SYSTEM" == "aosp" ];then
+if [ "$TARGET_SYSTEM" == "aosp" ]; then
     Build_AOSP
-elif [ "$TARGET_SYSTEM" == "miui" ];then
+elif [ "$TARGET_SYSTEM" == "miui" ]; then
     Build_MIUI
 else
     Build_AOSP
     Build_MIUI
 fi
-    
+
 echo "Done. The flashable zip is: [./$ZIP_FILENAME]"

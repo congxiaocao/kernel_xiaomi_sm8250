@@ -259,10 +259,10 @@ SET_CONFIG(){
     fi
 
     # Enable the KSU_MANUAL_HOOK for sukisu-ultra
-    if [ "$KSU_VERSION" == "sukisu-ultra" ];then
+    if [[ "$KSU_VERSION" == "sukisu-ultra" || "$KSU_VERSION" == "rksu"  ]];then
         scripts/config --file out/.config -e KSU_MANUAL_HOOK
     else
-        scripts/config --file out/.config -e KSU_MANUAL_HOOK
+        scripts/config --file out/.config -d KSU_MANUAL_HOOK
     fi
 
     # Config KPM 

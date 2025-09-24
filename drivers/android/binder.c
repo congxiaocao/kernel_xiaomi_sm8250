@@ -1491,7 +1491,7 @@ static void binder_cleanup_ref_olocked(struct binder_ref *ref)
 	}
 
 	if (ref->freeze)
-		binder_dequeue_work(ref->proc, &ref->freeze->work)
+		binder_dequeue_work(ref->proc, &ref->freeze->work);
 
 	binder_stats_deleted(BINDER_STAT_REF);
 }
@@ -1619,7 +1619,7 @@ static void binder_free_ref(struct binder_ref *ref)
 {
 	if (ref->node)
 		binder_free_node(ref->node);
-	kfree(ref->death)
+	kfree(ref->death);
 	kfree(ref->freeze);
 	kfree(ref);
 }
@@ -4791,7 +4791,7 @@ static int binder_thread_write(struct binder_proc *proc,
 			error = binder_freeze_notification_done(proc, thread, cookie);
 			if (error)
 				return error;
-		} break
+		} break;
 
 		default:
 			pr_err("%d:%d unknown command %d\n",
@@ -5565,7 +5565,7 @@ static void binder_free_proc(struct binder_proc *proc)
 			__func__, proc->outstanding_txns);
 	device = container_of(proc->context, struct binder_device, context);
 	if (refcount_dec_and_test(&device->ref)) {
-		binder_remove_device(devices);
+		binder_remove_device(device);
 		kfree(proc->context->name);
 		kfree(device);
 	}
@@ -6960,7 +6960,7 @@ static void print_binder_work_ilocked(struct seq_file *m,
 		break;
 	case BINDER_WORK_CLEAR_FREEZE_NOTIFICATION:
 		seq_printf(m, "%shas cleared freeze notification\n", prefix);
-		break
+		break;
 	default:
 		seq_printf(m, "%sunknown work: type %d\n", prefix, w->type);
 		break;
@@ -7113,7 +7113,7 @@ static void print_binder_proc(struct seq_file *m,
 	list_for_each_entry(w, &proc_wrapper(proc)->delivered_freeze, entry) {
 		seq_puts(m, "  has delivered freeze binder\n");
 		break;
-	
+	}
 	binder_inner_proc_unlock(proc);
 	if (!print_all && m->count == header_pos)
 		m->count = start_pos;

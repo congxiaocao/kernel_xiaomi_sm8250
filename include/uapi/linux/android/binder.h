@@ -508,7 +508,7 @@ enum binder_driver_return_protocol {
 	BR_CLEAR_FREEZE_NOTIFICATION_DONE = _IOR('r', 22, binder_uintptr_t),
 	/*
 	 * void *: cookie
-	 *
+	 */
 };
 
 enum binder_driver_command_protocol {
@@ -610,7 +610,7 @@ enum binder_driver_command_protocol {
 	BC_FREEZE_NOTIFICATION_DONE = _IOW('c', 21, binder_uintptr_t),
 	/*
 	 * void *: cookie
-	 *
+	 */
 };
 
 #endif /* _UAPI_LINUX_BINDER_H */

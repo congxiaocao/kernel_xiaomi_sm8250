@@ -50,22 +50,6 @@ module_param_named(debug_mask, binder_alloc_debug_mask,
 			pr_info_ratelimited(x); \
 	} while (0)
 
-static struct kmem_cache *binder_buffer_pool;
-
-int binder_buffer_pool_create(void)
-{
-	binder_buffer_pool = KMEM_CACHE(binder_buffer, SLAB_HWCACHE_ALIGN);
-	if (!binder_buffer_pool)
-		return -ENOMEM;
-
-	return 0;
-}
-
-void binder_buffer_pool_destroy(void)
-{
-	kmem_cache_destroy(binder_buffer_pool);
-}
-
 static struct binder_buffer *binder_buffer_next(struct binder_buffer *buffer)
 {
 	return list_entry(buffer->entry.next, struct binder_buffer, entry);
@@ -593,8 +577,7 @@ static struct binder_buffer *binder_alloc_new_buf_locked(
 
 out:
 	/* Discard possibly unused new_buffer */
-	if (new_buffer)
-		kmem_cache_free(binder_buffer_pool, new_buffer);
+	kfree(new_buffer);
 	return buffer;
 }
 
@@ -692,7 +675,7 @@ struct binder_buffer *binder_alloc_new_buf(struct binder_alloc *alloc,
 	}
 
 	/* Preallocate the next buffer */
-	next = kmem_cache_zalloc(binder_buffer_pool, GFP_KERNEL);
+	next = kzalloc(sizeof(*next), GFP_KERNEL);
 	if (!next)
 		return ERR_PTR(-ENOMEM);
 
@@ -752,7 +735,7 @@ static void binder_delete_free_buffer(struct binder_alloc *alloc,
 				buffer_start_page(buffer) + PAGE_SIZE);
 skip_freelist:
 	list_del(&buffer->entry);
-	kmem_cache_free(binder_buffer_pool, buffer);
+	kfree(buffer);
 }
 
 static void binder_free_buf_locked(struct binder_alloc *alloc,
@@ -933,7 +916,7 @@ int binder_alloc_mmap_handler(struct binder_alloc *alloc,
 
 	alloc->buffer = (void __user *)vma->vm_start;
 
-	alloc->pages = kvcalloc(alloc->buffer_size / PAGE_SIZE,
+	alloc->pages = kcalloc(alloc->buffer_size / PAGE_SIZE,
 			        sizeof(alloc->pages[0]),
 			        GFP_KERNEL);
 	if (alloc->pages == NULL) {
@@ -947,7 +930,7 @@ int binder_alloc_mmap_handler(struct binder_alloc *alloc,
 		INIT_LIST_HEAD(&alloc->pages[i].lru);
 	}
 
-	buffer = kmem_cache_zalloc(binder_buffer_pool, GFP_KERNEL);
+	buffer = kzalloc(sizeof(*buffer), GFP_KERNEL);
 	if (!buffer) {
 		ret = -ENOMEM;
 		failure_string = "alloc buffer struct";
@@ -965,7 +948,7 @@ int binder_alloc_mmap_handler(struct binder_alloc *alloc,
 	return 0;
 
 err_alloc_buf_struct_failed:
-	kvfree(alloc->pages);
+	kfree(alloc->pages);
 	alloc->pages = NULL;
 err_alloc_pages_failed:
 	alloc->buffer = NULL;
@@ -1012,7 +995,7 @@ void binder_alloc_deferred_release(struct binder_alloc *alloc)
 
 		list_del(&buffer->entry);
 		WARN_ON_ONCE(!list_empty(&alloc->buffers));
-		kmem_cache_free(binder_buffer_pool, buffer);
+		kfree(buffer);
 	}
 
 	page_count = 0;
@@ -1036,9 +1019,9 @@ void binder_alloc_deferred_release(struct binder_alloc *alloc)
 			__free_page(alloc->pages[i].page_ptr);
 			page_count++;
 		}
-		kvfree(alloc->pages);
 	}
 	binder_alloc_unlock(alloc);
+	kfree(alloc->pages);
 	if (alloc->vma_vm_mm)
 		mmdrop(alloc->vma_vm_mm);
 
@@ -1064,7 +1047,7 @@ void binder_alloc_print_allocated(struct seq_file *m,
 	binder_alloc_lock(alloc);
 	for (n = rb_first(&alloc->allocated_buffers); n; n = rb_next(n)) {
 		buffer = rb_entry(n, struct binder_buffer, rb_node);
-		seq_printf(m, "  buffer %d: %lx size %zd:%zd:%zd %s\n",
+		seq_printf(m, "  buffer %d: %tx size %zd:%zd:%zd %s\n",
 			   buffer->debug_id,
 			   buffer->user_data - alloc->buffer,
 			   buffer->data_size, buffer->offsets_size,

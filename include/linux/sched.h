@@ -1403,12 +1403,6 @@ struct task_struct {
 	unsigned int			inherit_top_app;
 	unsigned int    		critical_task;
 #endif
-#ifdef CONFIG_PERF_CRITICAL_RT_TASK
-	unsigned int    		critical_rt_task;
-#endif
-#ifdef CONFIG_SF_BINDER
-	unsigned int			sf_binder_task;
-#endif
 #ifdef CONFIG_PERF_HUMANTASK
 	unsigned int 			human_task;
 	unsigned int 			cpux;

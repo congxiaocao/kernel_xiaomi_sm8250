@@ -22,12 +22,6 @@ config MIGT
 	help
 	  Boost cpufreq when current frame drawing time too long
 
-config MILLET
-	bool "MIUI frozen framework"
-	depends on PACKAGE_RUNTIME_INFO
-	help
-	  MIUI frozen function
-
 config MIGT_ENERGY_MODEL
 	bool "DT-based Energy Model for CPU and GPU"
 	depends on MIGT
@@ -40,17 +34,6 @@ config PERF_HUMANTASK
 	bool "Enable MIUI humantask performance feature"
 	help
 	  This option adds support to switch on/off the sched humantask.
-
-config PERF_CRITICAL_RT_TASK
-	bool "Enable set rt binder thread" if EXPERT
-	help
-	  This option speeds ui feature by setting BlastBufferQueue binder
-	  thread to FIFO.
-
-config SF_BINDER
-	bool "Enable surfaceflinger binder thread" if EXPERT
-	help
-	  Xiaomi restore surfaceflinger binder priority FIFO
 
 config MIUI_ZRAM_MEMORY_TRACKING
 	bool "Track zRam stats"

@@ -69,9 +69,6 @@ struct package_runtime_info {
 	enum PKG_STATUS_TYPE edt;
 	u64 front_runtime[HISTORY_WINDOWS][MAX_CLUSTER];
 	u64 back_runtime[HISTORY_WINDOWS][MAX_CLUSTER];
-#ifdef CONFIG_MILLET
-	int millet_freeze_flag;
-#endif
 	struct {
 		cpumask_t cpus_allowed;
 		u32 migt_count;

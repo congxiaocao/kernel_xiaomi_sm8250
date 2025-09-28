@@ -266,9 +266,6 @@ void init_task_runtime_info(struct task_struct *tsk)
 					tsk->pkg.back_runtime[i][j] = 0;
 			}
 		}
-#ifdef CONFIG_MILLET
-		tsk->pkg.millet_freeze_flag = 0;
-#endif
 		migt_monitor_init(tsk);
 	}
 }

@@ -101,6 +101,11 @@ case "$KSU_VERSION" in
         echo "SukiSU & KPM is enabled"
         curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s nongki
         ;;
+    resukisu)
+        KSU_ZIP_STR=ReSukiSU
+        echo "ReSukiSU is enabled"
+        curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash
+        ;;
     *)
         KSU_ZIP_STR=NoKernelSU
         echo "KSU is disabled"
@@ -231,8 +236,8 @@ SET_CONFIG() {
         scripts/config --file out/.config -d KSU
     fi
 
-    # Enable the KSU_MANUAL_HOOK for sukisu-ultra and rksu
-    if [[ "$KSU_VERSION" == "sukisu" || "$KSU_VERSION" == "rksu" ]]; then
+    # Enable KSU_MANUAL_HOOK for sukisu, rksu, and resukisu
+    if [[ "$KSU_VERSION" == "sukisu" || "$KSU_VERSION" == "rksu" || "$KSU_VERSION" == "resukisu" ]]; then
         scripts/config --file out/.config -e KSU_MANUAL_HOOK
     else
         scripts/config --file out/.config -d KSU_MANUAL_HOOK
@@ -244,11 +249,6 @@ SET_CONFIG() {
             -e KPM \
             -e KALLSYMS \
             -e KALLSYMS_ALL
-    else
-        scripts/config --file out/.config \
-            -d KPM \
-            -d KALLSYMS \
-            -d KALLSYMS_ALL
     fi
 }
 
